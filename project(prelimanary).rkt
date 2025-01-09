@@ -1,192 +1,206 @@
 #lang racket
 
-(define (rep-eval-print-loop evaluator)
+;; =====================
+;; REPL Driver
+;; =====================
+(define (read-evaluate-print-loop evaluator)
   (display "repl> ")
-  (let ((expr (read)))
+  (let ((user-input (read)))
     (cond
-      ((eq? expr 'exit) ; Exit condition
-       (display "Exiting the loop...")
-       (newline))
-      (else
-       (write (evaluator expr)) ; Evaluate and print the result
+      [(eq? user-input 'quit)
+       (display "Quitting the REPL...")
+       (newline)]
+      [else
+       (write (evaluator user-input))
        (newline)
-       (rep-eval-print-loop evaluator))))) ; Tail-recursive call
+       (read-evaluate-print-loop evaluator)])))
 
-(define (read-token)
-  (let ((first-char (read-char))) ; Read the next character
+;; =====================
+;; Basic Tokenization
+;; =====================
+(define LPAR (list 'lparen-token))   ;; Unique token for '('
+(define RPAR (list 'rparen-token))   ;; Unique token for ')'
+
+(define (next-token)
+  (let ([ch (read-char)])
     (cond
-      ((char-whitespace? first-char) ; Ignore whitespace
-       (read-token))
-      ((eq? first-char #\() ; Detect '('
-       left-parenthesis-token)
-      ((eq? first-char #\)) ; Detect ')'
-       right-parenthesis-token)
-      ((char-alphabetic? first-char) ; Start of an identifier
-       (read-identifier first-char))
-      ((char-numeric? first-char) ; Start of a number
-       (read-number first-char))
-      (else
-       (error "Illegal syntax"))))) ; Invalid character
+      [(or (eq? ch #\space) (eq? ch #\newline))
+       (next-token)]            ;; Skip whitespace
+      [(eq? ch #\() LPAR]
+      [(eq? ch #\)) RPAR]
+      [(char-alphabetic? ch)    (read-identifier ch)]
+      [(char-numeric? ch)       (read-number ch)]
+      [else
+       (error "Unexpected character:" ch)])))
 
-(define (char-whitespace? char)
-  (or (eq? char #\space) (eq? char #\newline))) ; Check for space or newline
+(define (read-identifier first-ch)
+  (define (consume-identifier-chars so-far)
+    (let ([peeked (peek-char)])
+      (if (or (char-alphabetic? peeked) (char-numeric? peeked))
+          (consume-identifier-chars (cons (read-char) so-far))
+          (reverse so-far))))
+  (string->symbol
+   (list->string
+    (consume-identifier-chars (list first-ch)))))
 
-(define left-parenthesis-token (list '*left-parenthesis-token*)) ; Unique token for '('
-(define right-parenthesis-token (list '*right-parenthesis-token*)) ; Unique token for ')'
+(define (read-number first-ch)
+  (define (consume-number-chars so-far)
+    (let ([peeked (peek-char)])
+      (if (char-numeric? peeked)
+          (consume-number-chars (cons (read-char) so-far))
+          (reverse so-far))))
+  (string->number
+   (list->string
+    (consume-number-chars (list first-ch)))))
 
-(define (token-leftpar? token)
-  (eq? token left-parenthesis-token))
-
-(define (token-rightpar? token)
-  (eq? token right-parenthesis-token))
-
-(define (read-identifier char1)
-  (define (read-identifier-helper list-so-far)
-    (let ((next-char (peek-char)))
-      (if (or (char-alphabetic? next-char) (char-numeric? next-char))
-          (read-identifier-helper (cons (read-char) list-so-far))
-          (reverse list-so-far))))
-  (string->symbol (list->string(read-identifier-helper (list char1)))))
-
-(define (read-number char1)
-  (define (read-number-helper list-so-far)
-    (let ((next-char (peek-char)))
-      (if (char-numeric? next-char)
-          (read-number-helper (cons (read-char) list-so-far))
-          (reverse list-so-far))))
-  (string->number (list->string (read-number-helper (list char1)))))
-
-
+;; =====================
+;; Parsing S-expressions
+;; =====================
 (define (micro-read)
-  (let ((next-token (read-token)))
-    (cond ((token-leftpar? next-token)
-           (read-list '()))
-          (else
-           next-token))))
+  (let ([tok (next-token)])
+    (cond
+      [(eq? tok LPAR)  (parse-list '())]
+      [else            tok])))
 
-(define (read-list list-so-far)
-  (let ((token (read-token)))
-    (cond ((token-rightpar? token)
-           (reverse list-so-far)) ; Closing parenthesis ends the list
-          ((token-leftpar? token)
-           (read-list (cons (read-list '()) list-so-far))) ; Nested list
-          (else
-           (read-list (cons token list-so-far)))))) ; Add token to the list
+(define (parse-list collected)
+  (let ([tok (next-token)])
+    (cond
+      [(eq? tok RPAR)            (reverse collected)]
+      [(eq? tok LPAR)
+       (parse-list (cons (parse-list '()) collected))]
+      [else
+       (parse-list (cons tok collected))])))
 
-(define (math-eval expr)
-  (cond
-    ((number? expr)
-     expr)
-    (else(math-eval-combo expr))))
+;; =====================
+;; Evaluation
+;; =====================
+(define global-env '()) ;; Our global environment
 
-(define (math-eval-combo expr)
-  (let ((operator (eval-variable (car expr))) ; Look up operator
-        (args (map math-eval (cdr expr)))) ; Evaluate all arguments
-    (apply operator args))) ; Apply operator to all arguments
-
-
-
-(define (eval expr)
-  (cond
-    ((symbol? expr)
-     (eval-variable expr))
-    ((pair? expr)
-     (eval-list expr))
-    ((self-evaluating? expr)
-     expr)
-    (else
-     (error "Illegal expression:" expr))))
-
-(define (self-evaluating? expr)
-  (or (number? expr) (boolean? expr)))
-
-(define (eval-list expr)
-  (if (and (symbol? (car expr)) (special-form-name? expr))
-      (eval-special-form expr)
-      (math-eval-combo expr)))
-(define (special-form-name? expr)
-  (member (car expr) '(if define lambda cond)))
-
-
-(define (eval-special-form expr)
-  (let ((name (car expr)))
-    (cond ((eq? name 'define)
-           (eval-define expr))
-          ((eq? name 'lambda)
-           (eval-lambda expr))
-          ((eq? name 'if)
-           (eval-if expr))
-          ((eq? name 'cond)
-           (eval-cond expr)))))
-
-(define (eval-if expr)
-  (let ((expr-length (length expr)))
-    (if (eval (cadr expr))
-        (eval (caddr expr))
-        (if (= expr-length 4)
-            (eval (cadddr expr))
-            #f))))
-
-(define toplevel-envt '()) ; Use an immutable list
-
-(define (toplevel-bind! name value)
-  (let ((bdg (assoc name toplevel-envt)))
-    (if bdg
-        (set! toplevel-envt
-              (map (lambda (pair)
-                     (if (eq? (car pair) name)
-                         (list name value)
-                         pair))
-                   toplevel-envt)) ; Replace the matching pair
-        (set! toplevel-envt
-              (cons (list name value) toplevel-envt))))) ; Add new binding
-
-(define (toplevel-get name)
-  (let ((binding (assoc name toplevel-envt)))
+(define (lookup-global var)
+  (let ([binding (assoc var global-env)])
     (if binding
         (cadr binding)
-        (error "Undefined variable:" name))))
+        (error "Undefined variable:" var))))
 
-(toplevel-bind! '+ +)
-(toplevel-bind! '- -)
-(toplevel-bind! '* *)
-(toplevel-bind! '/ /)
-(toplevel-bind! 'list (lambda args args)) ; Create a list of arguments
-(toplevel-bind! 'cons cons)              ; Prepend an element to a list
-(toplevel-bind! 'car car)                ; Get the first element of a list
-(toplevel-bind! 'cdr cdr)                ; Get the rest of the list
+(define (bind-global! name val)
+  (let ([bd (assoc name global-env)])
+    (if bd
+        (set! global-env
+              (map (λ (pair)
+                     (if (eq? (car pair) name)
+                         (list name val)
+                         pair))
+                   global-env))
+        (set! global-env
+              (cons (list name val) global-env)))))
 
+;; Add basic math and list operations to the environment
+(bind-global! '+ +)
+(bind-global! '- -)
+(bind-global! '* *)
+(bind-global! '/ /)
+(bind-global! 'list (λ args args))
+(bind-global! 'cons cons)
+(bind-global! 'car car)
+(bind-global! 'cdr cdr)
 
-(define (eval-variable symbol)
-  (toplevel-get symbol))
+;; Main evaluator
+(define (my-eval expr)
+  (cond
+    [(symbol? expr)        (lookup-global expr)]
+    [(pair? expr)          (evaluate-list expr)]
+    [(or (number? expr)
+         (boolean? expr))  expr]
+    [else                  (error "Unrecognized expression:" expr)]))
 
-(define (eval-define expr)
-  (toplevel-bind! (cadr expr)
-                  (eval (caddr expr))))
+(define (evaluate-list expr)
+  (cond
+    [(and (symbol? (car expr))
+          (special-form? (car expr)))  (handle-special-form expr)]
+    [else                             (apply-function expr)]))
 
-(define (eval-lambda expr)
-  (let ((params (cadr expr))
-        (body (cddr expr))) ; Handle multiple expressions
-    (lambda args
-      (eval `(begin ,@body) (extend-env params args toplevel-envt)))))
+(define (special-form? maybe-sym)
+  (member maybe-sym '(define lambda if cond)))
 
+(define (handle-special-form expr)
+  (let ([keyword (car expr)])
+    (case keyword
+      [(define)  (handle-define expr)]
+      [(lambda)  (handle-lambda expr)]
+      [(if)      (handle-if expr)]
+      [(cond)    (handle-cond expr)]
+      [else      (error "Unknown special form:" keyword)])))
 
-(define (extend-env params args env)
-  (if (= (length params) (length args))
-      (append (map cons params args) env) ; Combine params and args, then append to existing env
-      (error "Parameter and argument count mismatch")))
+;; =====================
+;; Special Forms
+;; =====================
+(define (handle-define expr)
+  (bind-global! (cadr expr) (my-eval (caddr expr))))
 
-(define (eval-cond expr)
-  (define (evaluate-clauses clauses)
+(define (handle-lambda expr)
+  (let ([param-list (cadr expr)]
+        [body       (cddr expr)])
+    (λ args
+      (eval-with-extended-env body
+                              (extend-env param-list args global-env)))))
+
+(define (handle-if expr)
+  (let ([condition   (cadr expr)]
+        [true-branch (caddr expr)]
+        [false-branch (if (= (length expr) 4)
+                          (cadddr expr)
+                          #f)])
+    (if (my-eval condition)
+        (my-eval true-branch)
+        (my-eval false-branch))))
+
+(define (handle-cond expr)
+  (define (process-clauses clauses)
     (if (null? clauses)
-        (error "No matching condition in cond expression")
-        (let ((clause (car clauses)))
-          (if (eq? (car clause) 'else)
+        (error "No matching clause in cond")
+        (let ([cl (car clauses)])
+          (if (eq? (car cl) 'else)
               (if (null? (cdr clauses))
-                  (eval `(begin ,@(cdr clause))) ; Evaluate all expressions in the body
-                  (error "Else clause must be the last clause"))
-              (if (eval (car clause))
-                  (eval `(begin ,@(cdr clause))) ; Evaluate all expressions in the body
-                  (evaluate-clauses (cdr clauses))))))) ; Otherwise, try the next clause
-  (evaluate-clauses (cdr expr))) ; Skip the 'cond keyword
+                  (eval-sequence (cdr cl))
+                  (error "Else clause must come last in cond"))
+              (if (my-eval (car cl))
+                  (eval-sequence (cdr cl))
+                  (process-clauses (cdr clauses)))))))
+  (process-clauses (cdr expr)))
+
+;; Helper to evaluate a list of expressions in sequence
+(define (eval-sequence exprs)
+  (cond
+    [(null? exprs)    (void)]
+    [(null? (cdr exprs))
+     (my-eval (car exprs))]
+    [else
+     (my-eval (car exprs))
+     (eval-sequence (cdr exprs))]))
+
+
+;; =====================
+;; Environment Helpers
+;; =====================
+(define (extend-env params args old-env)
+  (if (= (length params) (length args))
+      (append (map list params args) old-env)
+      (error "Mismatched number of parameters and arguments")))
+
+(define (eval-with-extended-env body new-env)
+  (let ([original-env global-env])
+    (parameterize ([global-env (append new-env original-env)])
+      (eval-sequence body))))
+
+;; =====================
+;; Function Application
+;; =====================
+(define (apply-function expr)
+  (let ([operator (my-eval (car expr))]
+        [operands (map my-eval (cdr expr))])
+    (apply operator operands)))
+;;======================
+;;EXAMPLES
+;;======================
+
 
