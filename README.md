@@ -44,8 +44,8 @@ This repository contains a single file that implements the interpreter:
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/your-username/micro-lisp.git
-   cd micro-lisp
+   git clone https://github.com/Stefan-Rezashki/Scheme-Interpreter
+   cd Scheme-Interpreter
 2.Run the file:
    ```bash
       racket micro-lisp.rkt
