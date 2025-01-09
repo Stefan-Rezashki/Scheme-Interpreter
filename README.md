@@ -1,44 +1,41 @@
-# Scheme-Interpreter
-This project implements a interpreter written in Racket. It includes a Read-Eval-Print Loop (REPL) that allows users to interactively evaluate expressions. The interpreter supports basic arithmetic, list manipulation, conditionals, variable definitions, and custom function creation, as well as special forms like define, if, cond, and lambda.
+# Micro Lisp Interpreter in Racket
 
-# Features
-1. REPL (Read-Eval-Print Loop)
-2. Arithmetic Operations
-Supports basic arithmetic operations:
-  Addition
-  Multiplication
-  Nested arithmetic
+A minimal Scheme/Lisp-like interpreter written in [Racket](https://racket-lang.org/). This project demonstrates how to build a small Lisp dialect from scratch, complete with:
 
-3. Variable Definitions
-Users can define variables with define
+- A custom tokenizer and parser
+- An environment for variable bindings (with lexical scoping)
+- Support for special forms (e.g., `if`, `lambda`, `define`, `cond`, `begin`, logical operators)
+- A simple Read-Eval-Print Loop (REPL)
 
-4. Lists
-Provides list operations:
-  Create a list
-  Access first element
-  Access rest of the list
-  Add an element
+## Table of Contents
 
-5. Conditionals
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Requirements](#requirements)
+- [Usage](#usage)
+  - [Running the Interpreter](#running-the-interpreter)
+  - [Example Session](#example-session)
+- [Extending the Interpreter](#extending-the-interpreter)
+- [License](#license)
 
-6. Custom Functions
-Supports defining functions using lambda:
+## Features
 
-# Architecture
-1. Tokenization
-Functions tokenize user input to distinguish parentheses, numbers, identifiers, and special characters. Example tokens:
+1. **Lexical Scoping**: Functions (`lambda`) capture the environment in which they’re defined, ensuring variables remain accessible inside the function’s body.
+2. **Built-in Functions**: Includes standard arithmetic (`+`, `-`, `*`, `/`), list operations (`list`, `cons`, `car`, `cdr`), and comparisons (`>`, `<`, `>=`, `<=`, `=`).
+3. **Special Forms**:
+   - `define` for binding variables,
+   - `lambda` for function creation,
+   - `if` for conditional branching,
+   - `cond` for multi-branch conditional,
+   - `and` / `or` / `not` for logical operations,
+   - `begin` for sequencing multiple expressions.
+4. **Parser and Tokenizer**: Reads expressions from standard input, tokenizes them, and builds an internal list-based representation.
 
-2. Parsing
-Parses tokenized input into expressions for evaluation:
+## Project Structure
 
-3. Evaluation
-The evaluator processes the parsed expressions
+If you keep everything in a single file (e.g., `micro-lisp.rkt`), your structure might be:
 
-4. Environment
-The interpreter uses a global environment for variable bindings and built-in operations. It supports:
 
-Arithmetic operators (+, -, *, /)
-List functions (list, car, cdr, cons)
 
 5.Error Handling
 The interpreter raises descriptive errors for:
